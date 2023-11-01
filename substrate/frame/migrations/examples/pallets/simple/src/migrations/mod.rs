@@ -15,4 +15,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct MigrationsStorage;
+/// Module showcasing a simple use of the multi-block migrations framework.
+pub mod v0;

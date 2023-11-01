@@ -15,19 +15,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Minimal example of a runtime that uses the multi-block migrations framework.
+//! The most relevant part is the `pallet_migrations::Config` implementation. Here, we define the
+//! `Migrations` type as a tuple of the migrations that we want to run. In this case, we only have
+//! one migration, which is the [`v0::Migration`].
+
 use frame_support::{construct_runtime, derive_impl, traits::ConstU32};
-use pallet_migrations_examples_simple::{migrations::MigrationsStorage, pallet};
+use pallet_migrations_examples_simple::{migrations::*, pallet};
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
-impl pallet::Config for Runtime {
-	type Foo = u32;
-	type Bar = u64;
-}
+impl pallet::Config for Runtime {}
 
 impl pallet_migrations::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Migrations = MigrationsStorage;
+	/// The type that implements
+	/// [`SteppedMigrations`](`frame_support::migrations::SteppedMigrations`).
+	///
+	/// We list in this tuple the migrations to run.
+	///
+	/// # Example
+	/// ```ignore
+	/// type Migrations = (v0::Migration<Runtime>, v1::Migration<Runtime>, v3::Migration<Runtime>);
+	/// ```
+	type Migrations = (v0::Migration<Runtime>,);
 	type CursorMaxLen = ConstU32<256>;
 	type IdentifierMaxLen = ConstU32<256>;
 	type OnMigrationUpdate = ();

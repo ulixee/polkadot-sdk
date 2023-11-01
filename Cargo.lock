@@ -10098,6 +10098,7 @@ dependencies = [
  "pallet-migrations-examples-simple",
  "parity-scale-codec",
  "scale-info",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -10106,6 +10107,7 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "log",
  "parity-scale-codec",
  "scale-info",
 ]

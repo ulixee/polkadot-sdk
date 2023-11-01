@@ -11,6 +11,9 @@ description = "Example runtime for migrations"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[build-dependencies]
+substrate-wasm-builder = { path = "../../../../utils/wasm-builder", optional = true }
+
 [dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../support" }
 frame-system = { version = "4.0.0-dev", path = "../../../system" }

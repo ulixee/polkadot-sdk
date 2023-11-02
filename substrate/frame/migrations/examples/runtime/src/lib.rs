@@ -15,10 +15,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Minimal example of a runtime that uses the multi-block migrations framework.
-//! The most relevant part is the `pallet_migrations::Config` implementation. Here, we define the
-//! `Migrations` type as a tuple of the migrations that we want to run. In this case, we only have
-//! one migration, which is the [`v0::Migration`].
+//! # Minimal Example Runtime Using Multi-Block Migrations Framework
+//!
+//! This runtime provides a minimal example of how to use the Multi-Block Migrations framework
+//! in Substrate. The core part of this runtime is the `pallet_migrations::Config` implementation,
+//! where you define the migrations you want to run using the `Migrations` type.
+//!
+//! ## How to Read the Documentation
+//!
+//! To access and navigate this documentation in your browser, use the following command:
+//!
+//! ```
+//! cargo doc --package pallet-migrations-examples-runtime --open
+//! ```
+//!
+//! This documentation is organized to help you understand how this runtime is configured and how
+//! it uses the Multi-Block Migrations framework.
 
 use frame_support::{construct_runtime, derive_impl, traits::ConstU32};
 use pallet_migrations_examples_simple::{migrations::*, pallet};
@@ -32,11 +44,13 @@ impl pallet_migrations::Config for Runtime {
 	/// The type that implements
 	/// [`SteppedMigrations`](`frame_support::migrations::SteppedMigrations`).
 	///
-	/// We list in this tuple the migrations to run.
+	/// In this tuple, you list the migrations to run. In this example, we have a single migration,
+	/// [`v1::LazyMigrationV1`], which is the second version of the storage migration from the
+	/// [`pallet-migrations-examples-simple`](`pallet_migrations_examples_simple`) crate.
 	///
 	/// # Example
 	/// ```ignore
-	/// type Migrations = (v0::Migration<Runtime>, v1::Migration<Runtime>, v3::Migration<Runtime>);
+	/// type Migrations = (v1::Migration<Runtime>, v2::Migration<Runtime>, v3::Migration<Runtime>);
 	/// ```
 	type Migrations = (v1::LazyMigrationV1<Runtime>,);
 	type CursorMaxLen = ConstU32<256>;
@@ -51,6 +65,7 @@ impl frame_system::Config for Runtime {
 	type Block = Block;
 }
 
+// Construct the runtime using the `construct_runtime` macro, specifying the pallet_migrations.
 construct_runtime! {
 	pub struct Runtime
 	{

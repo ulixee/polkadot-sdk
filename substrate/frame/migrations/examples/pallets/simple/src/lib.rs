@@ -15,16 +15,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Minimal example of a pallet that uses the multi-block migrations framework.
+//! # Multi-Block Migrations Example Pallet
 //!
-//! The most important part of this pallet is the [`migrations::v0`] module, which contains the
-//! [`SteppedMigration`](`frame_support::migrations::SteppedMigration`) implementation. This
-//! implementation is used to migrate the values in the [`StoredValue`](`pallet::StoredValue`)
-//! storage map from `u32` to `u64`.
+//! This pallet serves as a minimal example of a pallet that uses the multi-block migrations
+//! framework.
+//!
+//! ## Introduction and Purpose
+//!
+//! The primary purpose of this pallet is to demonstrate the concept of multi-block migrations in
+//! Substrate. It showcases the migration of values from in the
+//! [`StoredValue`](`pallet::StoredValue`) storage map a `u32` to a `u64` data type using the
+//! [`SteppedMigration`](`frame_support::migrations::SteppedMigration`) implementation from the
+//! [`migrations::v1`] module.
 //!
 //! The [`StoredValue`](`pallet::StoredValue`) storage item is defined in this `pallet`, and is
 //! aliased to [`old::StoredValue`](`migrations::v0::old::StoredValue`) in the [`migrations::v0`]
 //! module.
+//!
+//! ## How to Read the Documentation
+//!
+//! To access and navigate this documentation in your browser, use the following command:
+//!
+//! ```
+//! cargo doc --package pallet-migrations-examples-simple --open
+//! ```
+//!
+//! This documentation is organized to help you understand the pallet's components, features, and
+//! migration process.
+//!
+//! ## Example Usage
+//!
+//! To use this pallet and understand multi-block migrations, you can refer to the
+//! [`migrations::v1`] module, which contains a step-by-step migration example.
+//!
+//! ## Pallet Structure
+//!
+//! The pallet is structured as follows:
+//!
+//! - [`migrations`]: Contains migration-related modules and migration logic.
+//!   - [`v1`](`migrations::v1`): Demonstrates the migration process for changing the data type in
+//!     the storage map.
+//! - [`pallet`]: Defines the pallet configuration and storage items.
+//!
+//! ## Migration Safety
+//!
+//! When working with migrations, it's crucial to ensure the safety of your migrations. The
+//! preferred tool to test migrations is
+//! [`try-runtime-cli`](https://github.com/paritytech/try-runtime-cli) but it is not yet ready for
+//! Multi-Block Migration. TODO: Update once MBM can be tested with `try-runtime-cli`.
+//!
+//! You can also consider using [`Chopsticks`](https://github.com/AcalaNetwork/chopsticks) for testing
+//! your migrations in addition to `try-runtime-cli`.
 
 pub mod migrations;
 
@@ -38,7 +79,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
+	/// Define a storage item to illustrate multi-block migrations.
 	#[pallet::storage]
-	/// Dummy storage item used to demonstrate the multi-block migrations framework.
 	pub type StoredValue<T: Config> = StorageMap<_, Blake2_128Concat, u32, u64>;
 }

@@ -15,9 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Multi-Block Migration v1
+//!
 //! This module showcases a simple migration that iterates over the values in the
-//! [`old::StoredValue`](`crate::migrations::v0::old::StoredValue`) storage map, transforms them and
-//! inserts them into the [`StoredValue`](`crate::pallet::StoredValue`) storage map.
+//! [`old::StoredValue`] storage map, transforms them, and
+//! inserts them into the [`StoredValue`] storage map.
 
 use super::{MigrationIdentifier, PALLET_MIGRATIONS_ID};
 use crate::pallet::{Config, StoredValue};
@@ -28,10 +30,10 @@ use frame_support::{
 	Hashable,
 };
 
-/// Module containing the old storage item.
+/// Module containing the OLD storage items.
 ///
-/// Before running this migration v0, the storage alias defined in here represents the `on_chain`
-/// storage.
+/// Before running this migration, the storage alias defined here represents the
+/// `on_chain` storage.
 // This module is public only for the purposes of linking it in the documentation. It is not
 // intended to be used by any other code.
 pub mod old {
@@ -62,8 +64,8 @@ impl<T: Config> SteppedMigration for LazyMigrationV1<T> {
 	///
 	/// This function is called repeatedly until it returns `Ok(None)`, indicating that the
 	/// migration is complete. Ideally, the migration should be designed in such a way that each
-	/// steps consumes as much weight as possible. But this is simplified to do one stored value
-	/// mutation per block.
+	/// step consumes as much weight as possible. However, this is simplified to perform one
+	/// stored value mutation per block.
 	fn step(
 		cursor: Option<Self::Cursor>,
 		_meter: &mut WeightMeter,

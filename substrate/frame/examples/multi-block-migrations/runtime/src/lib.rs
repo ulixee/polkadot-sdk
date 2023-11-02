@@ -25,9 +25,7 @@
 //!
 //! To access and navigate this documentation in your browser, use the following command:
 //!
-//! ```
-//! cargo doc --package pallet-examples-runtime-mbm --open
-//! ```
+//! - `cargo doc --package pallet-examples-runtime-mbm --open`
 //!
 //! This documentation is organized to help you understand how this runtime is configured and how
 //! it uses the Multi-Block Migrations framework.

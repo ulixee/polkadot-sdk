@@ -33,7 +33,7 @@
 //! it uses the Multi-Block Migrations framework.
 
 use frame_support::{construct_runtime, derive_impl, traits::ConstU32};
-use pallet_migrations_examples_simple::{migrations::*, pallet};
+use pallet_example_pallet_mbm::{migrations::*, pallet};
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -46,7 +46,7 @@ impl pallet_migrations::Config for Runtime {
 	///
 	/// In this tuple, you list the migrations to run. In this example, we have a single migration,
 	/// [`v1::LazyMigrationV1`], which is the second version of the storage migration from the
-	/// [`pallet-migrations-examples-simple`](`pallet_migrations_examples_simple`) crate.
+	/// [`pallet-example-pallet-mbm`](`pallet_example_pallet_mbm`) crate.
 	///
 	/// # Example
 	/// ```ignore

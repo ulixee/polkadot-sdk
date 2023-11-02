@@ -9840,6 +9840,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-pallet-mbm"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+]
+
+[[package]]
+name = "pallet-example-runtime-mbm"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-example-pallet-mbm",
+ "pallet-migrations",
+ "parity-scale-codec",
+ "scale-info",
+ "substrate-wasm-builder",
+]
+
+[[package]]
 name = "pallet-example-split"
 version = "4.0.0-dev"
 dependencies = [
@@ -10086,30 +10110,6 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "sp-version",
-]
-
-[[package]]
-name = "pallet-migrations-examples-runtime"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-migrations",
- "pallet-migrations-examples-simple",
- "parity-scale-codec",
- "scale-info",
- "substrate-wasm-builder",
-]
-
-[[package]]
-name = "pallet-migrations-examples-simple"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "log",
- "parity-scale-codec",
- "scale-info",
 ]
 
 [[package]]

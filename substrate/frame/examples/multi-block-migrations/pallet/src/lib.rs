@@ -37,7 +37,7 @@
 //! To access and navigate this documentation in your browser, use the following command:
 //!
 //! ```
-//! cargo doc --package pallet-migrations-examples-simple --open
+//! cargo doc --package pallet-example-pallet-mbm --open
 //! ```
 //!
 //! This documentation is organized to help you understand the pallet's components, features, and

@@ -38,7 +38,7 @@ impl pallet_migrations::Config for Runtime {
 	/// ```ignore
 	/// type Migrations = (v0::Migration<Runtime>, v1::Migration<Runtime>, v3::Migration<Runtime>);
 	/// ```
-	type Migrations = (v0::Migration<Runtime>,);
+	type Migrations = (v1::LazyMigrationV1<Runtime>,);
 	type CursorMaxLen = ConstU32<256>;
 	type IdentifierMaxLen = ConstU32<256>;
 	type OnMigrationUpdate = ();

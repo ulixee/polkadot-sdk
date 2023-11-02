@@ -7,13 +7,24 @@ license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository.workspace = true
 description = "Example FRAME pallet for migrations"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-frame-support = { version = "4.0.0-dev", path = "../../../../support" }
-frame-system = { version = "4.0.0-dev", path = "../../../../system" }
-log = "0.4.20"
-parity-scale-codec = "3.6.5"
-scale-info = "2.10.0"
+codec = { package = "parity-scale-codec", version = "3.6.5", default-features = false }
+frame-support = { version = "4.0.0-dev", path = "../../../../support", default-features = false }
+frame-system = { version = "4.0.0-dev", path = "../../../../system", default-features = false }
+log = { version = "0.4.20", default-features = false }
+scale-info = { version = "2.10.0", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+	"log/std",
+	"scale-info/std",
+]

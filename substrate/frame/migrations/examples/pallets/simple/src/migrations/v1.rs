@@ -19,11 +19,13 @@
 //! [`old::StoredValue`](`crate::migrations::v0::old::StoredValue`) storage map, transforms them and
 //! inserts them into the [`StoredValue`](`crate::pallet::StoredValue`) storage map.
 
+use super::{MigrationIdentifier, PALLET_MIGRATIONS_ID};
 use crate::pallet::{Config, StoredValue};
 use frame_support::{
 	migrations::{SteppedMigration, SteppedMigrationError},
 	pallet_prelude::PhantomData,
 	weights::WeightMeter,
+	Hashable,
 };
 
 /// Module containing the old storage item.
@@ -42,14 +44,18 @@ pub mod old {
 	pub type StoredValue<T: Config> = StorageMap<Pallet<T>, Blake2_128Concat, u32, u32>;
 }
 
-pub struct Migration<T: Config>(PhantomData<T>);
-impl<T: Config> SteppedMigration for Migration<T> {
+pub struct LazyMigrationV1<T: Config>(PhantomData<T>);
+impl<T: Config> SteppedMigration for LazyMigrationV1<T> {
 	type Cursor = u32;
-	type Identifier = u8;
+	type Identifier = MigrationIdentifier;
 
-	/// The identifier of this migration.
+	/// The identifier of this migration. Which should be globally unique.
 	fn id() -> Self::Identifier {
-		0
+		MigrationIdentifier {
+			pallet_identifier: (*PALLET_MIGRATIONS_ID).twox_128(),
+			version_from: 0,
+			version_to: 1,
+		}
 	}
 
 	/// The actual logic of the migration.
@@ -62,16 +68,21 @@ impl<T: Config> SteppedMigration for Migration<T> {
 		cursor: Option<Self::Cursor>,
 		_meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
-		let mut iter = if let Some(last_hash) = cursor {
-			old::StoredValue::<T>::iter_from(old::StoredValue::<T>::hashed_key_for(last_hash))
+		let mut iter = if let Some(last_key) = cursor {
+			// If a cursor is provided, start iterating from the stored value
+			// corresponding to the last key processed in the previous step.
+			old::StoredValue::<T>::iter_from(old::StoredValue::<T>::hashed_key_for(last_key))
 		} else {
+			// If no cursor is provided, start iterating from the beginning.
 			old::StoredValue::<T>::iter()
 		};
+
 		if let Some((hash, value)) = iter.next() {
+			// If there's a next item in the iterator, perform the migration.
 			StoredValue::<T>::insert(hash, value as u64);
-			Ok(Some(hash))
+			Ok(Some(hash)) // Return the processed key as the new cursor.
 		} else {
-			Ok(None)
+			Ok(None) // Signal that the migration is complete (no more items to process).
 		}
 	}
 }

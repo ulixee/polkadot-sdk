@@ -15,5 +15,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::{Decode, Encode, MaxEncodedLen};
+
 /// Module showcasing a simple use of the multi-block migrations framework.
-pub mod v0;
+pub mod v1;
+
+#[derive(MaxEncodedLen, Encode, Decode)]
+/// Used to identify a migration across all pallets.
+/// This useful because the
+/// [`SteppedMigration::Identifier`](`frame_support::migrations::SteppedMigration::Identifier`)
+/// needs to be globally unique.
+pub struct MigrationIdentifier {
+	pallet_identifier: [u8; 16],
+	version_from: u8,
+	version_to: u8,
+}
+
+/// A unique identifier across all pallets.
+const PALLET_MIGRATIONS_ID: &[u8; 33] = b"pallet-migrations-examples-simple";

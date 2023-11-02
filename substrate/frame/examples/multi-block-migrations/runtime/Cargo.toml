@@ -1,5 +1,5 @@
 [package]
-name = "pallet-example-runtime-mbm"
+name = "pallet-examples-runtime-mbm"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "3.6.5", default-features = 
 frame-support = { version = "4.0.0-dev", path = "../../../support", default-features = false }
 frame-system = { version = "4.0.0-dev", path = "../../../system", default-features = false }
 pallet-migrations = { version = "1.0.0", path = "../../../migrations", default-features = false }
-pallet-example-pallet-mbm = { version = "0.1.0", path = "../pallet", default-features = false }
+pallet-examples-pallet-mbm = { version = "0.1.0", path = "../pallet", default-features = false }
 scale-info = { version = "2.10.0", default-features = false }
 
 [features]
@@ -29,7 +29,7 @@ std = [
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-example-pallet-mbm/std",
+	"pallet-examples-pallet-mbm/std",
 	"pallet-migrations/std",
 	"scale-info/std",
 ]

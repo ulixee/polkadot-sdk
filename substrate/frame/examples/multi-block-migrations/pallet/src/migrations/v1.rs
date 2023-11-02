@@ -18,8 +18,8 @@
 //! # Multi-Block Migration v1
 //!
 //! This module showcases a simple migration that iterates over the values in the
-//! [`old::StoredValue`] storage map, transforms them, and
-//! inserts them into the [`StoredValue`] storage map.
+//! [`old::StoredValue`](`crate::migrations::v1::old::StoredValue`) storage map, transforms them,
+//! and inserts them into the [`StoredValue`](`crate::pallet::StoredValue`) storage map.
 
 use super::{MigrationIdentifier, PALLET_MIGRATIONS_ID};
 use crate::pallet::{Config, StoredValue};

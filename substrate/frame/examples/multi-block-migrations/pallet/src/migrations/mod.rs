@@ -38,4 +38,4 @@ pub struct MigrationIdentifier {
 ///
 /// This constant represents a unique identifier for the migrations of this pallet.
 /// It helps differentiate migrations for this pallet from those of others.
-const PALLET_MIGRATIONS_ID: &[u8; 25] = b"pallet-example-pallet-mbm";
+const PALLET_MIGRATIONS_ID: &[u8; 26] = b"pallet-examples-pallet-mbm";

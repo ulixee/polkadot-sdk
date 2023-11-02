@@ -29,7 +29,7 @@
 //! [`migrations::v1`] module.
 //!
 //! The [`StoredValue`](`pallet::StoredValue`) storage item is defined in this `pallet`, and is
-//! aliased to [`old::StoredValue`](`migrations::v0::old::StoredValue`) in the [`migrations::v0`]
+//! aliased to [`old::StoredValue`](`migrations::v1::old::StoredValue`) in the [`migrations::v1`]
 //! module.
 //!
 //! ## How to Read the Documentation
@@ -37,7 +37,7 @@
 //! To access and navigate this documentation in your browser, use the following command:
 //!
 //! ```
-//! cargo doc --package pallet-example-pallet-mbm --open
+//! cargo doc --package pallet-examples-pallet-mbm --open
 //! ```
 //!
 //! This documentation is organized to help you understand the pallet's components, features, and

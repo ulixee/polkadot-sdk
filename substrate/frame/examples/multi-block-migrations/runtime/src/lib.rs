@@ -26,14 +26,14 @@
 //! To access and navigate this documentation in your browser, use the following command:
 //!
 //! ```
-//! cargo doc --package pallet-migrations-examples-runtime --open
+//! cargo doc --package pallet-examples-runtime-mbm --open
 //! ```
 //!
 //! This documentation is organized to help you understand how this runtime is configured and how
 //! it uses the Multi-Block Migrations framework.
 
 use frame_support::{construct_runtime, derive_impl, traits::ConstU32};
-use pallet_example_pallet_mbm::{migrations::*, pallet};
+use pallet_examples_pallet_mbm::{migrations::*, pallet};
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
@@ -46,7 +46,7 @@ impl pallet_migrations::Config for Runtime {
 	///
 	/// In this tuple, you list the migrations to run. In this example, we have a single migration,
 	/// [`v1::LazyMigrationV1`], which is the second version of the storage migration from the
-	/// [`pallet-example-pallet-mbm`](`pallet_example_pallet_mbm`) crate.
+	/// [`pallet-examples-pallet-mbm`](`pallet_examples_pallet_mbm`) crate.
 	///
 	/// # Example
 	/// ```ignore

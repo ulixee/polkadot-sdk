@@ -17,7 +17,7 @@
 
 //! # Minimal Example Runtime Using Multi-Block Migrations Framework
 //!
-//! This runtime provides a minimal example of how to use the 
+//! This runtime provides a minimal example of how to use the
 //! [Multi-Block Migrations Framework](frame_support::migrations) and the [`pallet_migrations`].
 //! The core part of this runtime is the [`pallet_migrations::Config`] implementation, where you
 //! define the migrations you want to run using the [`Migrations`] type.

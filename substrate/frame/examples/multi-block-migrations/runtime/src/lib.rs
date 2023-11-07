@@ -17,9 +17,10 @@
 
 //! # Minimal Example Runtime Using Multi-Block Migrations Framework
 //!
-//! This runtime provides a minimal example of how to use the Multi-Block Migrations framework
-//! in Substrate. The core part of this runtime is the `pallet_migrations::Config` implementation,
-//! where you define the migrations you want to run using the `Migrations` type.
+//! This runtime provides a minimal example of how to use the 
+//! [Multi-Block Migrations Framework](frame_support::migrations) and the [`pallet_migrations`].
+//! The core part of this runtime is the [`pallet_migrations::Config`] implementation, where you
+//! define the migrations you want to run using the [`Migrations`] type.
 //!
 //! ## How to Read the Documentation
 //!
@@ -28,7 +29,7 @@
 //! - `cargo doc --package pallet-examples-runtime-mbm --open`
 //!
 //! This documentation is organized to help you understand how this runtime is configured and how
-//! it uses the Multi-Block Migrations framework.
+//! it uses the Multi-Block Migrations Framework.
 
 use frame_support::{construct_runtime, derive_impl, traits::ConstU32};
 use pallet_examples_pallet_mbm::{migrations::*, pallet};

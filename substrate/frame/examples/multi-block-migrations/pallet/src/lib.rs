@@ -17,12 +17,12 @@
 
 //! # Multi-Block Migrations Example Pallet
 //!
-//! This pallet serves as a minimal example of a pallet that uses the multi-block migrations
-//! framework.
+//! This pallet serves as a minimal example of a pallet that uses the [Multi-Block Migrations
+//! Framework](frame_support::migrations).
 //!
 //! ## Introduction and Purpose
 //!
-//! The primary purpose of this pallet is to demonstrate the concept of multi-block migrations in
+//! The primary purpose of this pallet is to demonstrate the concept of Multi-Block Migrations in
 //! Substrate. It showcases the migration of values from in the
 //! [`StoredValue`](`pallet::StoredValue`) storage map a `u32` to a `u64` data type using the
 //! [`SteppedMigration`](`frame_support::migrations::SteppedMigration`) implementation from the
@@ -59,8 +59,9 @@
 //!
 //! When working with migrations, it's crucial to ensure the safety of your migrations. The
 //! preferred tool to test migrations is
-//! [`try-runtime-cli`](https://github.com/paritytech/try-runtime-cli) but it is not yet ready for
-//! Multi-Block Migration. TODO: Update once MBM can be tested with `try-runtime-cli`.
+//! [`try-runtime-cli`](https://github.com/paritytech/try-runtime-cli). Support will be added to
+//! dry-run MBMs once they are stable
+//! (tracked: <https://github.com/paritytech/try-runtime-cli/issues/17>).
 //!
 //! You can also consider using [`Chopsticks`](https://github.com/AcalaNetwork/chopsticks) for testing
 //! your migrations in addition to `try-runtime-cli`.

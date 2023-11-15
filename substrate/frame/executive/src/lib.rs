@@ -124,7 +124,7 @@ use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	pallet_prelude::InvalidTransaction,
 	traits::{
-		EnsureInherentsAreFirst, EnsureInherentsAreOrdered, ExecuteBlock, OffchainWorker,
+		BeforeAllRuntimeMigrations, EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker,
 		OnFinalize, OnIdle, OnInitialize, OnPoll, OnRuntimeUpgrade, PostInherents,
 		PostTransactions, PreInherents,
 	},
@@ -143,9 +143,15 @@ use sp_runtime::{
 use sp_std::{marker::PhantomData, prelude::*};
 
 #[cfg(feature = "try-runtime")]
-use log;
-#[cfg(feature = "try-runtime")]
-use sp_runtime::TryRuntimeError;
+use ::{
+	frame_support::{
+		traits::{TryDecodeEntireStorage, TryDecodeEntireStorageError, TryState},
+		StorageNoopGuard,
+	},
+	frame_try_runtime::{TryStateSelect, UpgradeCheckSelect},
+	log,
+	sp_runtime::TryRuntimeError,
+};
 
 #[allow(dead_code)]
 const LOG_TARGET: &str = "runtime::executive";
@@ -186,7 +192,7 @@ pub struct Executive<
 );
 
 impl<
-		System: frame_system::Config + EnsureInherentsAreFirst<Block> + EnsureInherentsAreOrdered<Block>,
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
 		Block: traits::Block<
 			Header = frame_system::pallet_prelude::HeaderFor<System>,
 			Hash = System::Hash,
@@ -194,6 +200,7 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ BeforeAllRuntimeMigrations
 			+ OnInitialize<BlockNumberFor<System>>
 			+ OnIdle<BlockNumberFor<System>>
 			+ OnFinalize<BlockNumberFor<System>>
@@ -233,7 +240,7 @@ impl<
 
 #[cfg(feature = "try-runtime")]
 impl<
-		System: frame_system::Config + EnsureInherentsAreFirst<Block> + EnsureInherentsAreOrdered<Block>,
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
 		Block: traits::Block<
 			Header = frame_system::pallet_prelude::HeaderFor<System>,
 			Hash = System::Hash,
@@ -241,12 +248,14 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ BeforeAllRuntimeMigrations
 			+ OnInitialize<BlockNumberFor<System>>
 			+ OnIdle<BlockNumberFor<System>>
 			+ OnFinalize<BlockNumberFor<System>>
 			+ OffchainWorker<BlockNumberFor<System>>
 			+ OnPoll<BlockNumberFor<System>>
-			+ frame_support::traits::TryState<BlockNumberFor<System>>,
+			+ TryState<BlockNumberFor<System>>
+			+ TryDecodeEntireStorage,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 		MultiStepMigrator: frame_support::migrations::MultiStepMigrator,
 	>
@@ -331,7 +340,7 @@ impl<
 			}
 		}
 
-		Self::after_inherents();
+		Self::last_inherent();
 
 		// Apply transactions:
 		for e in extrinsics.iter().skip(num_inherents) {
@@ -355,11 +364,15 @@ impl<
 		let _guard = frame_support::StorageNoopGuard::default();
 		<AllPalletsWithSystem as frame_support::traits::TryState<
 			BlockNumberFor<System>,
-		>>::try_state(*header.number(), select)
+		>>::try_state(*header.number(), select.clone())
 		.map_err(|e| {
 			log::error!(target: LOG_TARGET, "failure: {:?}", e);
 			e
 		})?;
+		if select.any() {
+			let res = AllPalletsWithSystem::try_decode_entire_state();
+			Self::log_decode_result(res)?;
+		}
 		drop(_guard);
 
 		// do some of the checks that would normally happen in `final_checks`, but perhaps skip
@@ -399,30 +412,67 @@ impl<
 	/// Execute all `OnRuntimeUpgrade` of this runtime.
 	///
 	/// The `checks` param determines whether to execute `pre/post_upgrade` and `try_state` hooks.
-	pub fn try_runtime_upgrade(
-		checks: frame_try_runtime::UpgradeCheckSelect,
-	) -> Result<Weight, TryRuntimeError> {
-		let weight =
+	pub fn try_runtime_upgrade(checks: UpgradeCheckSelect) -> Result<Weight, TryRuntimeError> {
+		let before_all_weight =
+			<AllPalletsWithSystem as BeforeAllRuntimeMigrations>::before_all_runtime_migrations();
+		let try_on_runtime_upgrade_weight =
 			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
 				checks.pre_and_post(),
 			)?;
+		// Nothing should modify the state after the migrations ran:
+		let _guard = StorageNoopGuard::default();
 
+		// The state must be decodable:
+		if checks.any() {
+			let res = AllPalletsWithSystem::try_decode_entire_state();
+			Self::log_decode_result(res)?;
+		}
+
+		// Check all storage invariants:
 		if checks.try_state() {
-			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<
-				BlockNumberFor<System>,
-			>>::try_state(
+			AllPalletsWithSystem::try_state(
 				frame_system::Pallet::<System>::block_number(),
-				frame_try_runtime::TryStateSelect::All,
+				TryStateSelect::All,
 			)?;
 		}
 
-		Ok(weight)
+		Ok(before_all_weight.saturating_add(try_on_runtime_upgrade_weight))
+	}
+
+	/// Logs the result of trying to decode the entire state.
+	fn log_decode_result(
+		res: Result<usize, Vec<TryDecodeEntireStorageError>>,
+	) -> Result<(), TryRuntimeError> {
+		match res {
+			Ok(bytes) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"decoded the entire state ({bytes} bytes)",
+				);
+
+				Ok(())
+			},
+			Err(errors) => {
+				log::error!(
+					target: LOG_TARGET,
+					"`try_decode_entire_state` failed with {} errors",
+					errors.len(),
+				);
+
+				for (i, err) in errors.iter().enumerate() {
+					// We log the short version to `error` and then the full debug info to `debug`:
+					log::error!(target: LOG_TARGET, "- {i}. error: {err}");
+					log::debug!(target: LOG_TARGET, "- {i}. error: {err:?}");
+				}
+
+				Err("`try_decode_entire_state` failed".into())
+			},
+		}
 	}
 }
 
 impl<
-		System: frame_system::Config + EnsureInherentsAreFirst<Block> + EnsureInherentsAreOrdered<Block>,
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
 		Block: traits::Block<
 			Header = frame_system::pallet_prelude::HeaderFor<System>,
 			Hash = System::Hash,
@@ -430,6 +480,7 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ BeforeAllRuntimeMigrations
 			+ OnInitialize<BlockNumberFor<System>>
 			+ OnIdle<BlockNumberFor<System>>
 			+ OnFinalize<BlockNumberFor<System>>
@@ -456,11 +507,16 @@ impl<
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> Weight {
-		<(
+		let before_all_weight =
+			<AllPalletsWithSystem as BeforeAllRuntimeMigrations>::before_all_runtime_migrations();
+
+		let runtime_upgrade_weight = <(
 			COnRuntimeUpgrade,
 			AllPalletsWithSystem,
 			<System as frame_system::Config>::SingleBlockMigrations,
-		) as OnRuntimeUpgrade>::on_runtime_upgrade()
+		) as OnRuntimeUpgrade>::on_runtime_upgrade();
+
+		before_all_weight.saturating_add(runtime_upgrade_weight)
 	}
 
 	/// Start the execution of a particular block.
@@ -551,15 +607,10 @@ impl<
 			"Parent hash should be valid.",
 		);
 
-		let num_inherents = match System::ensure_inherents_are_first(block) {
+		match System::ensure_inherents_are_first(block) {
 			Ok(num) => num,
 			Err(i) => panic!("Invalid inherent position for extrinsic at index {}", i),
-		};
-
-		System::ensure_inherents_are_ordered(block, num_inherents as usize)
-			.expect("Inherents are ordered in a valid block");
-
-		num_inherents
+		}
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -582,7 +633,7 @@ impl<
 
 			// Process inherents (if any).
 			Self::apply_extrinsics(extrinsics.iter().take(num_inherents), mode);
-			Self::after_inherents();
+			Self::last_inherent();
 			// Process transactions (if any).
 			Self::apply_extrinsics(extrinsics.iter().skip(num_inherents), mode);
 
@@ -597,7 +648,7 @@ impl<
 
 	/// Progress ongoing MBM migrations.
 	// Used by the block builder and Executive.
-	pub fn after_inherents() {
+	pub fn last_inherent() {
 		if MultiStepMigrator::ongoing() {
 			let used_weight = MultiStepMigrator::step();
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
@@ -721,7 +772,7 @@ impl<
 		if dispatch_info.class != DispatchClass::Mandatory &&
 			mode == ExtrinsicInclusionMode::OnlyInherents
 		{
-			// The block builder respects this by using the mode returned by `after_inherents`.
+			// The block builder respects this by using the mode returned by `last_inherent`.
 			panic!("Only Mandatory extrinsics are allowed during Multi-Block-Migrations");
 		}
 		// Check whether we need to error because extrinsics are paused.

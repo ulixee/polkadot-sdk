@@ -29,12 +29,12 @@ mod benches {
 	use frame_support::traits::Hooks;
 
 	#[benchmark]
-	fn on_runtime_upgrade() {
+	fn onboard_new_mbms() {
 		assert!(!Cursor::<T>::exists());
 
 		#[block]
 		{
-			Pallet::<T>::on_runtime_upgrade();
+			Pallet::<T>::onboard_new_mbms();
 		}
 	}
 
@@ -51,7 +51,6 @@ mod benches {
 
 	#[benchmark]
 	fn on_init_base() {
-		// FAIL-CI
 		Cursor::<T>::set(Some(cursor::<T>()));
 		System::<T>::set_block_number(1u32.into());
 
@@ -72,23 +71,42 @@ mod benches {
 		}
 	}
 
-	/// Benchmarks the slowest path of `change_value`.
 	#[benchmark]
 	fn force_set_cursor() {
-		Cursor::<T>::set(Some(cursor::<T>()));
-
 		#[extrinsic_call]
 		_(RawOrigin::Root, Some(cursor::<T>()));
 	}
 
 	#[benchmark]
-	fn clear_historic(n: Linear<0, 1000>) {
-		//for i in 0..n { // TODO
-		//	Historic::<T>::insert(i.into(), ());
-		//}
+	fn force_set_active_cursor() {
+		#[extrinsic_call]
+		_(RawOrigin::Root, 0, None, None);
+	}
+
+	#[benchmark]
+	fn force_onboard_mbms() {
+		#[extrinsic_call]
+		_(RawOrigin::Root);
+	}
+
+	#[benchmark]
+	fn clear_historic(n: Linear<0, { DEFAULT_HISTORIC_BATCH_CLEAR_SIZE * 2 }>) {
+		let id_max_len = <T as Config>::IdentifierMaxLen::get();
+		assert!(id_max_len >= 4, "Precondition violated");
+
+		for i in 0..DEFAULT_HISTORIC_BATCH_CLEAR_SIZE * 2 {
+			let id = IdentifierOf::<T>::truncate_from(
+				i.encode().into_iter().cycle().take(id_max_len as usize).collect::<Vec<_>>(),
+			);
+
+			Historic::<T>::insert(&id, ());
+		}
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, None, None);
+		_(
+			RawOrigin::Root,
+			HistoricCleanupSelector::Wildcard { limit: n.into(), previous_cursor: None },
+		);
 	}
 
 	fn cursor<T: Config>() -> CursorOf<T> {

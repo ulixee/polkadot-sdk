@@ -75,9 +75,12 @@ impl PostTransactions for Tuple {
 	}
 }
 
-/// FAIL-CI doc
+/// Periodically executes logic. Is not guaranteed to run within a specific timeframe and should
+/// only be used on logic that has no deadline.
 pub trait OnPoll<BlockNumber> {
-	/// FAIL-CI doc
+	/// Code to execute every now and then at the beginning of the block after inherent application.
+	///
+	/// The remaining weight limit must be respected.
 	fn on_poll(_n: BlockNumber, _weight: &mut WeightMeter) {}
 }
 
@@ -160,6 +163,19 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
+/// Implemented by pallets, allows defining logic to run prior to any [`OnRuntimeUpgrade`] logic.
+///
+/// This hook is intended to be used internally in FRAME and not be exposed to FRAME developers.
+///
+/// It is defined as a seperate trait from [`OnRuntimeUpgrade`] precisely to not pollute the public
+/// API.
+pub trait BeforeAllRuntimeMigrations {
+	/// Something that should happen before runtime migrations are executed.
+	fn before_all_runtime_migrations() -> Weight {
+		Weight::zero()
+	}
+}
+
 /// See [`Hooks::on_runtime_upgrade`].
 pub trait OnRuntimeUpgrade {
 	/// See [`Hooks::on_runtime_upgrade`].
@@ -214,7 +230,21 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl BeforeAllRuntimeMigrations for Tuple {
+	/// Implements the default behavior of
+	/// [`BeforeAllRuntimeMigrations::before_all_runtime_migrations`] for tuples.
+	fn before_all_runtime_migrations() -> Weight {
+		let mut weight = Weight::zero();
+		for_tuples!( #( weight = weight.saturating_add(Tuple::before_all_runtime_migrations()); )* );
+		weight
+	}
+}
+
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
+	/// Implements the default behavior of [`OnRuntimeUpgrade::on_runtime_upgrade`] for tuples.
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
@@ -404,7 +434,10 @@ pub trait Hooks<BlockNumber> {
 		Weight::zero()
 	}
 
-	/// FAIL-CI doc
+	/// A hook to run logic after inherent application.
+	///
+	/// Is not guaranteed to execute in a block and should therefore only be used in no-deadline
+	/// scenarios.
 	fn on_poll(_n: BlockNumber, _weight: &mut WeightMeter) {}
 
 	/// Hook executed when a code change (aka. a "runtime upgrade") is detected by FRAME.

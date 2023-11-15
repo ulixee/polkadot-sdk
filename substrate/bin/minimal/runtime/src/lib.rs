@@ -32,6 +32,7 @@ use frame::{
 		prelude::*,
 	},
 };
+use frame_support::genesis_builder_helper::{build_config, create_default_config};
 
 #[runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -159,8 +160,8 @@ impl_runtime_apis! {
 			data.check_extrinsics(&block)
 		}
 
-		fn after_inherents() {
-			RuntimeExecutive::after_inherents()
+		fn last_inherent() {
+			RuntimeExecutive::last_inherent()
 		}
 	}
 
@@ -213,6 +214,16 @@ impl_runtime_apis! {
 		}
 		fn query_length_to_fee(length: u32) -> interface::Balance {
 			TransactionPayment::length_to_fee(length)
+		}
+	}
+
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+		fn create_default_config() -> Vec<u8> {
+			create_default_config::<RuntimeGenesisConfig>()
+		}
+
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			build_config::<RuntimeGenesisConfig>(config)
 		}
 	}
 }

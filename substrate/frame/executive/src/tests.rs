@@ -20,11 +20,10 @@
 use super::*;
 
 use sp_core::H256;
-use sp_inherents::{InherentOrder, InherentOrderError};
 use sp_runtime::{
 	generic::{DigestItem, Era},
 	testing::{Block, Digest, Header},
-	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT, IdentityLookup},
+	traits::{Block as BlockT, Header as HeaderT},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidityError, UnknownTransaction, ValidTransaction,
 	},
@@ -32,11 +31,11 @@ use sp_runtime::{
 };
 
 use frame_support::{
-	assert_err, assert_ok,
+	assert_err, assert_ok, derive_impl,
 	migrations::MultiStepMigrator,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{fungible, ConstU32, ConstU64, ConstU8, Currency},
+	traits::{fungible, ConstU8, Currency},
 	weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightMeter, WeightToFee},
 };
 use frame_system::{pallet_prelude::*, ChainContext, LastRuntimeUpgradeInfo};
@@ -84,7 +83,7 @@ mod custom {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		pub fn some_function(origin: OriginFor<T>) -> DispatchResult {
-			// NOTE: does not make any different.
+			// NOTE: does not make any difference.
 			frame_system::ensure_signed(origin)?;
 			Ok(())
 		}
@@ -173,9 +172,6 @@ mod custom2 {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
-	#[pallet::storage]
-	pub type RequireInherent<T> = StorageValue<_, InherentOrder, OptionQuery>;
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		// module hooks.
@@ -254,10 +250,6 @@ mod custom2 {
 			None
 		}
 
-		fn inherent_order() -> Option<InherentOrder> {
-			RequireInherent::<T>::get()
-		}
-
 		fn is_inherent(call: &Self::Call) -> bool {
 			*call == Call::<T>::inherent {}
 		}
@@ -309,53 +301,25 @@ parameter_types! {
 		write: 100,
 	};
 }
+
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = BlockWeights;
-	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
-	type Hash = sp_core::H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<u64>;
 	type Block = TestBlock;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
 	type Version = RuntimeVersion;
-	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<Balance>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
-	type SingleBlockMigrations = ();
-	type MultiBlockMigrator = ();
-	type PreInherents = ();
-	type PostInherents = ();
-	type PostTransactions = ();
 }
 
 type Balance = u64;
+
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig as pallet_balances::DefaultConfig)]
 impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
-	type RuntimeEvent = RuntimeEvent;
-	type DustRemoval = ();
-	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
-	type MaxLocks = ();
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
-	type WeightInfo = ();
-	type FreezeIdentifier = ();
-	type MaxFreezes = ConstU32<1>;
-	type RuntimeHoldReason = ();
-	type RuntimeFreezeReason = ();
-	type MaxHolds = ConstU32<1>;
 }
 
 parameter_types! {
@@ -1300,53 +1264,6 @@ fn ensure_inherents_are_first_works() {
 				vec![xt2.clone(), xt2.clone(), xt2.clone(), in1.clone()]
 			),),
 			Err(3)
-		);
-	});
-}
-
-#[test]
-fn ensure_inherents_are_ordered_works() {
-	use InherentOrder::*;
-	use InherentOrderError::*;
-
-	let in1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent {}), None);
-	let in2 = TestXt::new(RuntimeCall::Custom2(custom2::Call::inherent {}), None);
-
-	// Mocked empty header:
-	let header = new_test_ext(1).execute_with(|| Executive::finalize_block());
-
-	new_test_ext(1).execute_with(|| {
-		/*assert_ok!(Runtime::ensure_inherents_are_ordered(&Block::new(header.clone(), vec![]), 9));
-
-		assert_ok!(
-			Runtime::ensure_inherents_are_ordered(&Block::new(header.clone(), vec![in1.clone()]), 9),
-		);
-		assert_ok!(
-			Runtime::ensure_inherents_are_ordered(&Block::new(header.clone(), vec![in2.clone()]), 9),
-		);*/
-
-		custom2::RequireInherent::<Runtime>::set(Some(InherentOrder::Last));
-		assert_ok!(Runtime::ensure_inherents_are_ordered(
-			&Block::new(header.clone(), vec![in1.clone(), in2.clone()]),
-			9
-		),);
-
-		custom2::RequireInherent::<Runtime>::set(Some(InherentOrder::First));
-		assert_err!(
-			Runtime::ensure_inherents_are_ordered(
-				&Block::new(header.clone(), vec![in1.clone(), in2.clone()]),
-				9
-			),
-			OutOfOrder(Index(3), First),
-		);
-
-		custom2::RequireInherent::<Runtime>::set(Some(InherentOrder::Last));
-		assert_err!(
-			Runtime::ensure_inherents_are_ordered(
-				&Block::new(header.clone(), vec![in2.clone(), in2.clone()]),
-				9
-			),
-			OutOfOrder(Last, Last),
 		);
 	});
 }

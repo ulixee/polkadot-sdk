@@ -16,14 +16,16 @@
 // limitations under the License.
 
 use crate::{
+	defensive,
 	storage::transactional::with_transaction_opaque_err,
-	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
+	traits::{Defensive, GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight, WeightMeter},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
+use sp_runtime::traits::Zero;
 use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Handles storage migration pallet versioning.
@@ -53,7 +55,7 @@ use sp_std::{marker::PhantomData, vec::Vec};
 /// 	// OnRuntimeUpgrade implementation...
 /// }
 ///
-/// pub type VersionCheckedMigrateV5ToV6<T, I> =
+/// pub type MigrateV5ToV6<T, I> =
 /// 	VersionedMigration<
 /// 		5,
 /// 		6,
@@ -65,7 +67,7 @@ use sp_std::{marker::PhantomData, vec::Vec};
 /// // Migrations tuple to pass to the Executive pallet:
 /// pub type Migrations = (
 /// 	// other migrations...
-/// 	VersionCheckedMigrateV5ToV6<T, ()>,
+/// 	MigrateV5ToV6<T, ()>,
 /// 	// other migrations...
 /// );
 /// ```
@@ -120,7 +122,7 @@ impl<
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == FROM {
 			log::info!(
-				"🚚 Pallet {:?} migrating storage version from {:?} to {:?}.",
+				"🚚 Pallet {:?} VersionedMigration migrating storage version from {:?} to {:?}.",
 				Pallet::name(),
 				FROM,
 				TO
@@ -135,7 +137,7 @@ impl<
 			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
 		} else {
 			log::warn!(
-				"🚚 Pallet {:?} migration {}->{} can be removed; on-chain is already at {:?}.",
+				"🚚 Pallet {:?} VersionedMigration migration {}->{} can be removed; on-chain is already at {:?}.",
 				Pallet::name(),
 				FROM,
 				TO,
@@ -360,10 +362,11 @@ pub trait SteppedMigration {
 	/// If two migrations have the same identifier, then they are assumed to be identical.
 	fn id() -> Self::Identifier;
 
-	/// The maximum number of steps that this migration can take at most.
+	/// The maximum number of steps that this migration can take.
 	///
-	/// This can be used to enforce progress and prevent migrations to be stuck forever. A migration
-	/// that exceeds its max steps is treated as failed. `None` means that there is no limit.
+	/// This can be used to enforce progress and prevent migrations becoming stuck forever. A
+	/// migration that exceeds its max steps is treated as failed. `None` means that there is no
+	/// limit.
 	fn max_steps() -> Option<u32> {
 		None
 	}
@@ -373,7 +376,8 @@ pub trait SteppedMigration {
 	/// **ANY STORAGE CHANGES MUST BE ROLLED-BACK BY THE CALLER UPON ERROR.** This is necessary
 	/// since the caller cannot return a cursor in the error case. `Self::transactional_step` is
 	/// provided as convenience for a caller. A cursor of `None` implies that the migration is at
-	/// its end. TODO: Think about iterator `fuse` requirement.
+	/// its end.
+	// TODO: Think about iterator `fuse` requirement.
 	fn step(
 		cursor: Option<Self::Cursor>,
 		meter: &mut WeightMeter,
@@ -395,22 +399,7 @@ pub trait SteppedMigration {
 	}
 }
 
-impl SteppedMigration for () {
-	type Cursor = ();
-	type Identifier = ();
-
-	fn id() -> Self::Identifier {
-		()
-	}
-
-	fn step(
-		_cursor: Option<Self::Cursor>,
-		_meter: &mut WeightMeter,
-	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
-		Ok(None)
-	}
-}
-
+/// Error that can occur during a [`SteppedMigration`].
 #[derive(Debug, Encode, Decode, MaxEncodedLen, scale_info::TypeInfo)]
 pub enum SteppedMigrationError {
 	// Transient errors:
@@ -418,7 +407,10 @@ pub enum SteppedMigrationError {
 	///
 	/// Can be resolved by calling with at least `required` weight. Note that calling it with
 	/// exactly `required` weight could cause it to not make any progress.
-	InsufficientWeight { required: Weight },
+	InsufficientWeight {
+		/// Amount of weight required to make progress.
+		required: Weight,
+	},
 	// Permanent errors:
 	/// The migration cannot decode its cursor and therefore not proceed.
 	///
@@ -430,18 +422,32 @@ pub enum SteppedMigrationError {
 	Failed,
 }
 
-/// Notification handler for status updates regarding runtime upgrades.
-pub trait OnMigrationUpdate {
-	/// Notifies of the start of a runtime upgrade.
+/// Notification handler for status updates regarding Multi-Block-Migrations.
+#[impl_trait_for_tuples::impl_for_tuples(8)]
+pub trait MigrationStatusHandler {
+	/// Notifies of the start of a runtime migration.
 	fn started() {}
 
-	/// Notifies of the completion of a runtime upgrade.
+	/// Notifies of the completion of a runtime migration.
 	fn completed() {}
+}
 
-	/// Infallibly handle a failed runtime upgrade.
+/// Handles a failed runtime migration.
+///
+/// This should never happen, but is here for completeness.
+pub trait FailedMigrationHandler {
+	/// Infallibly handle a failed runtime migration.
 	///
-	/// Gets passed in the optional index of the migration that caused the failure.
-	fn failed(migration: Option<u32>) -> FailedUpgradeHandling;
+	/// Gets passed in the optional index of the migration in the batch that caused the failure.
+	/// Returning `None` means that no automatic handling should take place and the callee decides
+	/// in the implementation what to do.
+	fn failed(migration: Option<u32>) -> Option<FailedUpgradeHandling>;
+}
+
+impl FailedMigrationHandler for () {
+	fn failed(_migration: Option<u32>) -> Option<FailedUpgradeHandling> {
+		Some(FailedUpgradeHandling::KeepStuck)
+	}
 }
 
 /// How to proceed after a runtime upgrade failed.
@@ -452,20 +458,15 @@ pub enum FailedUpgradeHandling {
 	/// This should be supplemented with additional measures to ensure that the broken chain state
 	/// does not get further messed up by user extrinsics.
 	ForceUnstuck,
-	/// Do nothing and keep blocking extrinsics.
+	/// Set the cursor to `Stuck` and keep blocking extrinsics.
 	KeepStuck,
-}
-
-impl OnMigrationUpdate for () {
-	fn failed(_migration: Option<u32>) -> FailedUpgradeHandling {
-		FailedUpgradeHandling::KeepStuck
-	}
 }
 
 /// Something that can do multi step migrations.
 pub trait MultiStepMigrator {
 	/// Hint for whether [`Self::step`] should be called.
 	fn ongoing() -> bool;
+
 	/// Do the next step in the MBM process.
 	///
 	/// Must gracefully handle the case that it is currently not upgrading.
@@ -492,6 +493,11 @@ pub trait SteppedMigrations {
 	/// Is guaranteed to return `Some` if `n < Self::len()`.
 	fn nth_id(n: u32) -> Option<Vec<u8>>;
 
+	/// The [`SteppedMigration::max_steps`] of the `n`th migration.
+	///
+	/// Is guaranteed to return `Some` if `n < Self::len()`.
+	fn nth_max_steps(n: u32) -> Option<Option<u32>>;
+
 	/// Do a [`SteppedMigration::step`] on the `n`th migration.
 	///
 	/// Is guaranteed to return `Some` if `n < Self::len()`.
@@ -510,32 +516,105 @@ pub trait SteppedMigrations {
 		meter: &mut WeightMeter,
 	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>>;
 
-	/// The [`SteppedMigration::max_steps`] of the `n`th migration.
-	///
-	/// Is guaranteed to return `Some` if `n < Self::len()`.
-	fn nth_max_steps(n: u32) -> Option<Option<u32>>;
-
 	/// The maximal encoded length across all cursors.
 	fn cursor_max_encoded_len() -> usize;
 
 	/// The maximal encoded length across all identifiers.
 	fn identifier_max_encoded_len() -> usize;
+
+	/// Assert the integrity of the migrations.
+	///
+	/// Should be executed as part of a test prior to runtime usage. May or may not need
+	/// externalities.
+	#[cfg(feature = "std")]
+	fn integrity_test() -> Result<(), &'static str> {
+		use crate::ensure;
+		let l = Self::len();
+
+		for n in 0..l {
+			ensure!(Self::nth_id(n).is_some(), "id is None");
+			ensure!(Self::nth_max_steps(n).is_some(), "steps is None");
+
+			// The cursor that we use does not matter. Hence use empty.
+			ensure!(
+				Self::nth_step(n, Some(vec![]), &mut WeightMeter::new()).is_some(),
+				"steps is None"
+			);
+			ensure!(
+				Self::nth_transactional_step(n, Some(vec![]), &mut WeightMeter::new()).is_some(),
+				"steps is None"
+			);
+		}
+
+		Ok(())
+	}
 }
 
+impl SteppedMigrations for () {
+	fn len() -> u32 {
+		0
+	}
+
+	fn nth_id(_n: u32) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn nth_max_steps(_n: u32) -> Option<Option<u32>> {
+		None
+	}
+
+	fn nth_step(
+		_n: u32,
+		_cursor: Option<Vec<u8>>,
+		_meter: &mut WeightMeter,
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		None
+	}
+
+	fn nth_transactional_step(
+		_n: u32,
+		_cursor: Option<Vec<u8>>,
+		_meter: &mut WeightMeter,
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		None
+	}
+
+	fn cursor_max_encoded_len() -> usize {
+		0
+	}
+
+	fn identifier_max_encoded_len() -> usize {
+		0
+	}
+}
+
+// A collection consisting of only a single migration.
 impl<T: SteppedMigration> SteppedMigrations for T {
 	fn len() -> u32 {
 		1
 	}
 
-	fn nth_id(_: u32) -> Option<Vec<u8>> {
+	fn nth_id(_n: u32) -> Option<Vec<u8>> {
 		Some(T::id().encode())
 	}
 
+	fn nth_max_steps(n: u32) -> Option<Option<u32>> {
+		// It should be generally fine to call with n>0, but the code should not attempt to.
+		n.is_zero()
+			.then_some(T::max_steps())
+			.defensive_proof("nth_max_steps should only be called with n==0")
+	}
+
 	fn nth_step(
-		_: u32,
+		_n: u32,
 		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
 	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		if !_n.is_zero() {
+			defensive!("nth_step should only be called with n==0");
+			return None
+		}
+
 		let cursor = match cursor {
 			Some(cursor) => match T::Cursor::decode(&mut &cursor[..]) {
 				Ok(cursor) => Some(cursor),
@@ -548,10 +627,15 @@ impl<T: SteppedMigration> SteppedMigrations for T {
 	}
 
 	fn nth_transactional_step(
-		_: u32,
+		n: u32,
 		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
 	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		if n != 0 {
+			defensive!("nth_transactional_step should only be called with n==0");
+			return None
+		}
+
 		let cursor = match cursor {
 			Some(cursor) => match T::Cursor::decode(&mut &cursor[..]) {
 				Ok(cursor) => Some(cursor),
@@ -563,10 +647,6 @@ impl<T: SteppedMigration> SteppedMigrations for T {
 		Some(
 			T::transactional_step(cursor, meter).map(|cursor| cursor.map(|cursor| cursor.encode())),
 		)
-	}
-
-	fn nth_max_steps(_: u32) -> Option<Option<u32>> {
-		Some(T::max_steps())
 	}
 
 	fn cursor_max_encoded_len() -> usize {
@@ -672,6 +752,7 @@ impl SteppedMigrations for Tuple {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{assert_ok, storage::unhashed};
 
 	#[derive(Decode, Encode, MaxEncodedLen, Eq, PartialEq)]
 	pub enum Either<L, R> {
@@ -693,6 +774,7 @@ mod tests {
 			_meter: &mut WeightMeter,
 		) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 			log::info!("M0");
+			unhashed::put(&[0], &());
 			Ok(None)
 		}
 	}
@@ -711,6 +793,7 @@ mod tests {
 			_meter: &mut WeightMeter,
 		) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 			log::info!("M1");
+			unhashed::put(&[1], &());
 			Ok(None)
 		}
 
@@ -733,6 +816,7 @@ mod tests {
 			_meter: &mut WeightMeter,
 		) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 			log::info!("M2");
+			unhashed::put(&[2], &());
 			Ok(None)
 		}
 
@@ -740,6 +824,30 @@ mod tests {
 			Some(2)
 		}
 	}
+
+	pub struct F0;
+	impl SteppedMigration for F0 {
+		type Cursor = ();
+		type Identifier = u8;
+
+		fn id() -> Self::Identifier {
+			3
+		}
+
+		fn step(
+			_cursor: Option<Self::Cursor>,
+			_meter: &mut WeightMeter,
+		) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
+			log::info!("F0");
+			unhashed::put(&[3], &());
+			Err(SteppedMigrationError::Failed)
+		}
+	}
+
+	// Three migrations combined to execute in order:
+	type Triple = (M0, (M1, M2));
+	// Six migrations, just concatenating the ones from before:
+	type Hextuple = (Triple, Triple);
 
 	#[test]
 	fn singular_migrations_work() {
@@ -756,12 +864,9 @@ mod tests {
 
 	#[test]
 	fn tuple_migrations_work() {
-		sp_tracing::init_for_tests();
-		// Three migrations combined to execute in order:
-		type Triple = (M0, (M1, M2));
+		assert_eq!(<() as SteppedMigrations>::len(), 0);
+		assert_eq!(<((), ((), ())) as SteppedMigrations>::len(), 0);
 		assert_eq!(<Triple as SteppedMigrations>::len(), 3);
-		// Six migrations, just concatenating the ones from before:
-		type Hextuple = (Triple, Triple);
 		assert_eq!(<Hextuple as SteppedMigrations>::len(), 6);
 
 		// Check the IDs. The index specific functions all return an Option,
@@ -770,8 +875,47 @@ mod tests {
 		assert_eq!(<Triple as SteppedMigrations>::nth_id(1), Some(1u8.encode()));
 		assert_eq!(<Triple as SteppedMigrations>::nth_id(2), Some(2u8.encode()));
 
-		for n in 0..3 {
-			<Triple as SteppedMigrations>::nth_step(n, Default::default(), &mut WeightMeter::new());
-		}
+		sp_io::TestExternalities::default().execute_with(|| {
+			for n in 0..3 {
+				<Triple as SteppedMigrations>::nth_step(
+					n,
+					Default::default(),
+					&mut WeightMeter::new(),
+				);
+			}
+		});
+	}
+
+	#[test]
+	fn integrity_test_works() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert_ok!(<() as SteppedMigrations>::integrity_test());
+			assert_ok!(<M0 as SteppedMigrations>::integrity_test());
+			assert_ok!(<M1 as SteppedMigrations>::integrity_test());
+			assert_ok!(<M2 as SteppedMigrations>::integrity_test());
+			assert_ok!(<Triple as SteppedMigrations>::integrity_test());
+			assert_ok!(<Hextuple as SteppedMigrations>::integrity_test());
+		});
+	}
+
+	#[test]
+	fn transactional_rollback_works() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			assert_ok!(<(M0, F0) as SteppedMigrations>::nth_transactional_step(
+				0,
+				Default::default(),
+				&mut WeightMeter::new()
+			)
+			.unwrap());
+			assert!(unhashed::exists(&[0]));
+			assert!(<(M0, F0) as SteppedMigrations>::nth_transactional_step(
+				1,
+				Default::default(),
+				&mut WeightMeter::new()
+			)
+			.unwrap()
+			.is_err());
+			assert!(!unhashed::exists(&[3]), "Should roll back");
+		});
 	}
 }

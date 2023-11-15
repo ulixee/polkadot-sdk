@@ -23,7 +23,7 @@ use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, One, Saturating};
 use sp_core::bounded::bounded_vec::TruncateFrom;
-use sp_inherents::InherentOrderError;
+
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -56,7 +56,7 @@ impl VariantCount for () {
 macro_rules! defensive {
 	() => {
 		frame_support::__private::log::error!(
-			target: "runtime",
+			target: "runtime::defensive",
 			"{}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR
 		);
@@ -64,7 +64,7 @@ macro_rules! defensive {
 	};
 	($error:expr $(,)?) => {
 		frame_support::__private::log::error!(
-			target: "runtime",
+			target: "runtime::defensive",
 			"{}: {:?}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
 			$error
@@ -73,7 +73,7 @@ macro_rules! defensive {
 	};
 	($error:expr, $proof:expr $(,)?) => {
 		frame_support::__private::log::error!(
-			target: "runtime",
+			target: "runtime::defensive",
 			"{}: {:?}: {:?}",
 			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
 			$error,
@@ -897,13 +897,6 @@ pub trait EnsureInherentsAreFirst<Block> {
 	/// success it returns the index of the last inherent. `0` therefore means that there are no
 	/// inherents.
 	fn ensure_inherents_are_first(block: &Block) -> Result<u32, u32>;
-}
-
-pub trait EnsureInherentsAreOrdered<Block> {
-	fn ensure_inherents_are_ordered(
-		block: &Block,
-		num_inherents: usize,
-	) -> Result<(), InherentOrderError>;
 }
 
 /// An extrinsic on which we can get access to call.

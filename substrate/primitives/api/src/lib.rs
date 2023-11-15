@@ -529,11 +529,12 @@ pub fn init_runtime_logger() {
 #[cfg(feature = "std")]
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
-	#[error("Failed to decode return value of {function}")]
+	#[error("Failed to decode return value of {function}: {error} raw data: {raw:?}")]
 	FailedToDecodeReturnValue {
 		function: &'static str,
 		#[source]
 		error: codec::Error,
+		raw: Vec<u8>,
 	},
 	#[error("Failed to convert return value from runtime to node of {function}")]
 	FailedToConvertReturnValue {
@@ -665,6 +666,34 @@ pub trait CallApiAt<Block: BlockT> {
 		at: Block::Hash,
 		extensions: &mut Extensions,
 	) -> Result<(), ApiError>;
+}
+
+#[cfg(feature = "std")]
+impl<Block: BlockT, T: CallApiAt<Block>> CallApiAt<Block> for std::sync::Arc<T> {
+	type StateBackend = T::StateBackend;
+
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, ApiError> {
+		(**self).call_api_at(params)
+	}
+
+	fn runtime_version_at(
+		&self,
+		at_hash: <Block as BlockT>::Hash,
+	) -> Result<RuntimeVersion, ApiError> {
+		(**self).runtime_version_at(at_hash)
+	}
+
+	fn state_at(&self, at: <Block as BlockT>::Hash) -> Result<Self::StateBackend, ApiError> {
+		(**self).state_at(at)
+	}
+
+	fn initialize_extensions(
+		&self,
+		at: <Block as BlockT>::Hash,
+		extensions: &mut Extensions,
+	) -> Result<(), ApiError> {
+		(**self).initialize_extensions(at, extensions)
+	}
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

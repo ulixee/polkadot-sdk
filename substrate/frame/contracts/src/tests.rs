@@ -5569,13 +5569,9 @@ fn native_dependency_deposit_works() {
 	// Set hash lock up deposit to 30%, to test deposit calculation.
 	CODE_HASH_LOCKUP_DEPOSIT_PERCENT.with(|c| *c.borrow_mut() = Perbill::from_percent(30));
 
-	// Set a low existential deposit so that the base storage deposit is based on the contract
-	// storage deposit rather than the existential deposit.
-	const ED: u64 = 10;
-
 	// Test with both existing and uploaded code
 	for code in [Code::Upload(wasm.clone()), Code::Existing(code_hash)] {
-		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		ExtBuilder::default().build().execute_with(|| {
 			let _ = Balances::set_balance(&ALICE, 1_000_000);
 			let lockup_deposit_percent = CodeHashLockupDepositPercent::get();
 
@@ -5617,7 +5613,8 @@ fn native_dependency_deposit_works() {
 			);
 
 			let addr = res.result.unwrap().account_id;
-			let base_deposit = ED + test_utils::contract_info_storage_deposit(&addr);
+			let min_balance = Contracts::min_balance();
+			let base_deposit = min_balance + test_utils::contract_info_storage_deposit(&addr);
 			let upload_deposit = test_utils::get_code_deposit(&code_hash);
 			let extra_deposit = add_upload_deposit.then(|| upload_deposit).unwrap_or_default();
 
@@ -5649,7 +5646,7 @@ fn native_dependency_deposit_works() {
 			assert_eq!(test_utils::get_contract(&addr).storage_base_deposit(), deposit);
 			assert_eq!(
 				test_utils::get_balance_on_hold(&HoldReason::StorageDepositReserve.into(), &addr),
-				deposit - ED
+				deposit - min_balance
 			);
 		});
 	}

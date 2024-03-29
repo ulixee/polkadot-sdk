@@ -21,13 +21,13 @@
 
 use sp_std::{borrow::Cow, iter::Iterator, marker::PhantomData, mem, result, vec, vec::Vec};
 
-#[cfg(not(all(feature = "std", feature = "wasmtime")))]
+#[cfg(any(not(all(feature = "std", feature = "wasmtime")), target_os = "ios"))]
 #[macro_export]
 macro_rules! if_wasmtime_is_enabled {
 	($($token:tt)*) => {};
 }
 
-#[cfg(all(feature = "std", feature = "wasmtime"))]
+#[cfg(all(feature = "std", feature = "wasmtime", not(target_os = "ios")))]
 #[macro_export]
 macro_rules! if_wasmtime_is_enabled {
     ($($token:tt)*) => {
@@ -381,7 +381,7 @@ impl HostFunctions for Tuple {
 		host_functions
 	}
 
-	#[cfg(all(feature = "std", feature = "wasmtime"))]
+	#[cfg(all(feature = "std", feature = "wasmtime", not(target_os = "ios")))]
 	fn register_static<T>(registry: &mut T) -> core::result::Result<(), T::Error>
 	where
 		T: HostFunctionRegistry,
@@ -506,13 +506,13 @@ where
 /// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
 ///
 /// This trait is sealed and should not be implemented downstream.
-#[cfg(all(feature = "std", feature = "wasmtime"))]
+#[cfg(all(feature = "std", feature = "wasmtime", not(target_os = "ios")))]
 pub trait WasmTy: wasmtime::WasmTy + private::Sealed {}
 
 /// A trait for types directly usable at the WASM FFI boundary without any conversion at all.
 ///
 /// This trait is sealed and should not be implemented downstream.
-#[cfg(not(all(feature = "std", feature = "wasmtime")))]
+#[cfg(not(all(feature = "std", feature = "wasmtime", not(target_os = "ios"))))]
 pub trait WasmTy: private::Sealed {}
 
 impl WasmTy for i32 {}
